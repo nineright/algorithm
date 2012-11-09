@@ -27,7 +27,7 @@ typedef struct{
 	uint8 dir; //dir=1表示在当前节点右侧，dir=0在左侧
 	uint8 t;   //当前状态所在节点
 }QNode;
-QNode que[MAX_LEN];
+QNode que[MAX_QLEN];
 uint8 vis[4][MAX_LEN][2];
 int calc(int num, uint8 t)
 {
