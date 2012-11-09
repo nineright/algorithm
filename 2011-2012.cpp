@@ -15,95 +15,143 @@
 #include<algorithm>
 using namespace std;
 
-const int MAX_LEN = 4000000;
+typedef unsigned char uint8;
+const int MAX_LEN = 2000000;
+const int MAX_QLEN = 1000000;
 //对搜索状态进行判重
-bool vis[4][MAX_LEN]; 
-//运算过程中可能会产生负数，但是-5产生的负数不会太小
-const int offset = 1000; 
 int g[5][5];
-int calc(int num, int t, char *expr)
+
+typedef struct{
+	int cs;   //当前值
+	int pre; //上次所在节点在队列中的下标
+	uint8 dir; //dir=1表示在当前节点右侧，dir=0在左侧
+	uint8 t;   //当前状态所在节点
+}QNode;
+QNode que[MAX_LEN];
+uint8 vis[4][MAX_LEN][2];
+int calc(int num, uint8 t)
 {
-	num -= offset;
+//	printf("%s\n", expr);
 	switch(t){
 	case 1:
-		strcat(expr, "+7)");
-		return num+7+offset;
+		return num+7;
 	case 2:
-		strcat(expr, "/2)");
-		return (num>>1)+offset;
+		return num*3;
 	case 3:
-		strcat(expr, "*3)");
-		return num*3+offset;
+		return (num>>1);
 	case 4:
-		strcat(expr, "-5)");
-		return num-5+offset;
+		return num-5;
 	default:
 		printf("Opps t = %d\n", t);
 	}
 }
-bool dfs(int cur, int t, int d, char *expr)
+
+//通过记录两边操作次数的奇偶性判断从左/右边到右/左边的操作是否合法
+bool check(uint8 pre, uint8 t, uint8 dir)
 {
-	//bool ret = false;
-	//在指定表达式操作数数目下存在表达式
-	//因为2012不能整除3，所以不可能由*3得到2012
-	if(t == 4 && cur == 2012+offset){
-		printf("num of operators in expr is %d\n", strlen(expr)/3);
-		printf("expression: ");
-		for(int i = 0; i < strlen(expr); i += 3)
-			putchar('(');
-		printf("%s\n", expr);
-		return true;
+	//上次操作和本次操作属于同一侧
+	if((pre&1) == (t&1))
+		return true;	
+
+	if(t == 1 || t == 3)
+		return dir == 0;	
+	else 
+		return dir == 1;
+}
+
+void print_expr(int idx)
+{
+	if(que[idx].pre != -1)
+		print_expr(que[idx].pre);
+
+	switch(que[idx].t){
+	case 1:
+		printf("+7)");
+		break;
+	case 2:
+		printf("*3)");
+		break;
+	case 3:
+		printf("/2)");
+		break;
+	case 4:
+		printf("-5)");
+		break;
+	defalut:
+		printf("Opps t = %d\n", que[idx].t);
 	}
-	if(d == 0)
-		return false;
-	if(t > 0)	
-		vis[t-1][cur] = 1;
-	for(int i = 1; i <= 4; i++){
-		if(i != t && g[t][i]){
-			int tmp = calc(cur, i, expr);
-			if(tmp < MAX_LEN && !vis[i-1][tmp]){
-				if(dfs(tmp, i, d-1, expr))
-					//ret = true;
-					return true;
-			}	
-			expr[strlen(expr)-3] = '\0'; 
+}
+
+void bfs()
+{
+	int start = 2011;	
+	int rear, front;
+	front = rear = 0;
+	que[rear].cs= start+7;
+	que[rear].t = 1;
+	que[rear].pre = -1;
+	que[rear++].dir = 1;
+
+	que[rear].cs= start/2;
+	que[rear].t = 3;
+	que[rear].pre = -1;
+	que[rear++].dir = 1;
+
+	memset(vis, 0x00, sizeof(vis));
+	vis[0][start+7][1] = 1;
+	vis[2][start/2][1] = 1;
+	while(front < rear && rear < MAX_QLEN){
+		QNode cur = que[front++];
+		uint8 t = cur.t;
+		//printf("[%d] cs:%d t:%d pre:%d dir:%d\n", front-1, cur.cs, cur.t, cur.pre, cur.dir);
+		if(cur.cs == 2012 && t == 4 && cur.dir == 1){
+			printf("Min number of operator is %d\n", vis[t-1][cur.cs][cur.dir]);
+			for(int i = 0; i < vis[cur.t-1][cur.cs][cur.dir]; i++)
+				putchar('(');
+			printf("2011");
+			print_expr(front-1);
+			puts("");
+			break;
+		}
+		for(int i = 1; i <= 4; i++){
+			if(i != t && g[t][i] && check(t, i, cur.dir)){
+				QNode tmp;
+				if((t&1) == (i&1))
+					tmp.dir = cur.dir^1;//在同一侧绕圈,反向改变
+				else tmp.dir = cur.dir;
+				tmp.cs = calc(cur.cs, i);
+				tmp.t = i;
+				tmp.pre = front-1;
+				
+				//if(tmp.cs < 0)
+				//	printf("%d\n", vis[t-1][cur.cs][cur.dir]);	
+				if(tmp.cs >= 0 && tmp.cs < MAX_LEN && !vis[i-1][tmp.cs][tmp.dir]){
+					que[rear++] = tmp;	
+					vis[i-1][tmp.cs][tmp.dir] = vis[t-1][cur.cs][cur.dir]+1;
+				}
+			}
 		}
 	}
-	//return ret;
-	return false;
+	
 }
 int main()
 {
 
 	char expr[100];
-	int start = 2011;
 	//fill the graph
 	memset(g, 0x00, sizeof(g));
 	for(int i = 1; i <= 4; i++)
 		for(int j = i+1; j <= 4; j++)
 			g[i][j] = g[j][i] = 1;
-	g[0][1] = g[0][2] = 1;
+	g[0][1] = g[0][3] = 1;
 
-	//二分表达式长度，限定dfs的搜索深度
-	int l = 1, r = 34;
-	while(l <= r){
-		memset(vis, false, sizeof(vis));	
-		memset(expr, 0x00, sizeof(expr));
-		int mid = (l+r)/2;
-		//length of mid is ok
-		if(dfs(2011+offset, 0, mid, expr)){
-			r = mid-1;		
-		}
-		else
-			l = mid+1;
-	}
+	bfs();
 	return 0;
 }
 
 /*
- * Number of operator is 20
- * ((((((((((((((((((((2011+7)/2)+7)/2)+7)/2)+7)/2)+7)/2)+7)*3) \
- * 						-5)+7)-5)*3)-5)*3)+7)-5)
- * 		
+ * Min number of operator is 26
+ * ((((((((((((((((((((((((((2011/2)+7)/2)+7)/2)+7)/2)+7)/2)*3) \
+ *  			-5)*3)-5)+7)/2)-5)*3)-5)*3)/2)+7)-5)*3)/2)+7)-5)	
  * 
  */
